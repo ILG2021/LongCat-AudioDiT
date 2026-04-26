@@ -1,0 +1,81 @@
+# ============================================================
+# LongCat-AudioDiT Fine-tuning Configuration  (v2)
+# ============================================================
+# Run with:
+#   python finetune.py --config finetune_config.yaml
+# Multi-GPU:
+#   accelerate launch finetune.py --config finetune_config.yaml
+# ============================================================
+
+# ── Model ────────────────────────────────────────────────────
+model_dir:  "meituan-longcat/LongCat-AudioDiT-1B"
+output_dir: "finetune_output"
+
+# ── Data ─────────────────────────────────────────────────────
+train_metadata: "data/train.csv"
+val_metadata:   "data/val.csv"    # set to "" to skip validation
+
+max_duration: 15.0   # seconds — samples longer than this are dropped
+min_duration:  0.5   # seconds — samples shorter than this are dropped
+
+# ── Text encoding mode ────────────────────────────────────────
+#
+#  "cached"  → read pre-encoded embeddings from text_cache_dir
+#              RUN FIRST:  python cache_embeddings.py --metadata data/train.csv data/val.csv
+#              GPU VRAM saved: ~1.1 GB (UMT5-base bf16)
+#              Training speed: faster (no encoder forward per batch)
+#              ✅ RECOMMENDED for RTX 5090 / any GPU < 48 GB
+#
+#  "cpu"     → run UMT5 on CPU per batch (no pre-caching needed)
+#              GPU VRAM saved: ~1.1 GB; small extra latency
+#
+#  "gpu"     → run UMT5 on the same GPU as the DiT
+#              Requires ~1.1 GB extra GPU VRAM
+#
+text_encoding_mode: "cached"
+text_cache_dir:     "text_cache"     # written by cache_embeddings.py
+
+# VAE latent cache (used by all modes; created automatically on first run)
+latent_dir: "latent_cache"
+
+# ── Training ─────────────────────────────────────────────────
+batch_size:                  4      # per-device
+gradient_accumulation_steps: 4      # effective batch = 4 × 4 = 16
+num_epochs:                  50
+max_steps:                         # leave blank to use num_epochs
+
+learning_rate:  1.0e-4
+weight_decay:   1.0e-2
+warmup_steps:   500
+grad_clip:      1.0
+seed:           42
+
+# ── Mixed precision ───────────────────────────────────────────
+# "bf16" recommended for RTX 50xx / A100 / H100
+# "fp16" for older Ampere cards (RTX 30xx / A6000)
+# "no"   for full fp32 (not recommended)
+mixed_precision: "bf16"
+
+# ── CFM ──────────────────────────────────────────────────────
+sigma:            0.0    # noise floor — keep 0.0 to match pretrained model
+mask_prompt_loss: true   # exclude reference-audio frames from CFM loss
+
+# ── Memory optimisations ──────────────────────────────────────
+gradient_checkpointing: true   # trades ~20% speed for ~30% less VRAM
+
+# Freeze the first N DiT blocks (0 = train all 24/32 blocks)
+# e.g. freeze_first_n_blocks: 16  → only train last 8 blocks → less VRAM + faster
+freeze_first_n_blocks: 0
+
+# Unfreeze UMT5 text encoder (only valid when text_encoding_mode: "gpu")
+# Useful for adapting to a new language or domain vocabulary
+train_text_encoder: false
+
+# ── DataLoader ────────────────────────────────────────────────
+num_workers: 4
+
+# ── Logging & checkpointing ───────────────────────────────────
+log_every:   20     # optimizer steps between log lines
+save_every:  500    # optimizer steps between checkpoints
+val_every:   500    # optimizer steps between validation runs
+keep_last_n: 3      # number of checkpoints to keep on disk
