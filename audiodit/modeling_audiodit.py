@@ -840,9 +840,10 @@ class AudioDiTVae(nn.Module):
         Returns:
             Latent tensor ``(batch, latent_dim, num_frames)`` in float32.
         """
-        is_half = next(self.encoder.parameters()).dtype == torch.float16
-        if is_half:
-            audio = audio.half()
+        encoder_dtype = next(self.encoder.parameters()).dtype
+        use_low_precision = encoder_dtype in (torch.float16, torch.bfloat16)
+        if use_low_precision:
+            audio = audio.to(dtype=encoder_dtype)
         latents = self.encoder(audio)
         # VAE bottleneck runs in the same dtype as encoder output (fp16)
         # to match original: bottleneck.encode(latents) happens before .float()
@@ -850,7 +851,7 @@ class AudioDiTVae(nn.Module):
         stdev = F.softplus(scale_param) + 1e-4
         latents = torch.randn_like(mean) * stdev + mean
         # Convert to fp32 after bottleneck, matching original AutoencoderPretransform
-        if is_half:
+        if use_low_precision:
             latents = latents.float()
         return latents / self.scale
 
@@ -867,11 +868,12 @@ class AudioDiTVae(nn.Module):
             Waveform tensor ``(batch, 1, num_samples)`` in float32.
         """
         z = latents * self.scale
-        is_half = next(self.decoder.parameters()).dtype == torch.float16
-        if is_half:
-            z = z.half()
+        decoder_dtype = next(self.decoder.parameters()).dtype
+        use_low_precision = decoder_dtype in (torch.float16, torch.bfloat16)
+        if use_low_precision:
+            z = z.to(dtype=decoder_dtype)
         decoded = self.decoder(z)
-        if is_half:
+        if use_low_precision:
             decoded = decoded.float()
         return decoded
 
