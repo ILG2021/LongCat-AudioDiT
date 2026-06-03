@@ -228,7 +228,7 @@ def build_demo(default_model: str):
                 mode = gr.Radio(
                     label="声音来源",
                     choices=["默认声音", "参考声音"],
-                    value="默认声音",
+                    value="参考声音",
                 )
                 reference_audio = gr.Audio(
                     label="参考音频",
