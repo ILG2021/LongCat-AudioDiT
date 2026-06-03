@@ -1,5 +1,7 @@
 import argparse
 import os
+import threading
+import uuid
 from pathlib import Path
 
 os.environ["GRADIO_ANALYTICS_ENABLED"] = "False"
@@ -116,6 +118,8 @@ class VoiceSynthesisEngine:
 
 engine = VoiceSynthesisEngine()
 transcription_model = None
+generation_lock = threading.Lock()
+transcription_lock = threading.Lock()
 
 
 def get_transcription_model():
@@ -136,14 +140,15 @@ def transcribe_reference_audio(audio_path):
         return ""
 
     try:
-        model = get_transcription_model()
-        segments, _ = model.transcribe(
-            audio_path,
-            beam_size=5,
-            vad_filter=True,
-            condition_on_previous_text=False,
-        )
-        text = "".join(segment.text for segment in segments).strip()
+        with transcription_lock:
+            model = get_transcription_model()
+            segments, _ = model.transcribe(
+                audio_path,
+                beam_size=5,
+                vad_filter=True,
+                condition_on_previous_text=False,
+            )
+            text = "".join(segment.text for segment in segments).strip()
         if not text:
             raise gr.Error("没有识别到参考音频中的语音内容。")
         return text
@@ -169,20 +174,21 @@ def run_inference(
     guidance_method,
     seed,
 ):
-    sr, wav = engine.generate(
-        text=text,
-        use_reference=mode == "参考声音",
-        reference_text=reference_text,
-        reference_audio_path=reference_audio,
-        model_path=model_path,
-        quality_steps=quality_steps,
-        guidance_strength=guidance_strength,
-        guidance_method=guidance_method,
-        seed=seed,
-    )
+    with generation_lock:
+        sr, wav = engine.generate(
+            text=text,
+            use_reference=mode == "参考声音",
+            reference_text=reference_text,
+            reference_audio_path=reference_audio,
+            model_path=model_path,
+            quality_steps=quality_steps,
+            guidance_strength=guidance_strength,
+            guidance_method=guidance_method,
+            seed=seed,
+        )
 
     DEFAULT_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-    output_path = DEFAULT_OUTPUT_DIR / "voice_output.wav"
+    output_path = DEFAULT_OUTPUT_DIR / f"voice_{uuid.uuid4().hex}.wav"
     sf.write(output_path, wav, sr)
     return (sr, wav), str(output_path)
 
