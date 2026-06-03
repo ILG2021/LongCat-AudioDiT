@@ -123,24 +123,11 @@ def get_transcription_model():
     if transcription_model is not None:
         return transcription_model
 
-    from qwen_asr import Qwen3ASRModel
+    from faster_whisper import WhisperModel
 
-    if torch.cuda.is_available():
-        transcription_model = Qwen3ASRModel.from_pretrained(
-            "Qwen/Qwen3-ASR-1.7B",
-            dtype=torch.bfloat16,
-            device_map="cuda:0",
-            max_inference_batch_size=1,
-            max_new_tokens=256,
-        )
-    else:
-        transcription_model = Qwen3ASRModel.from_pretrained(
-            "Qwen/Qwen3-ASR-1.7B",
-            dtype=torch.float32,
-            device_map="cpu",
-            max_inference_batch_size=1,
-            max_new_tokens=256,
-        )
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    compute_type = "float16" if device == "cuda" else "int8"
+    transcription_model = WhisperModel("turbo", device=device, compute_type=compute_type)
     return transcription_model
 
 
@@ -150,8 +137,13 @@ def transcribe_reference_audio(audio_path):
 
     try:
         model = get_transcription_model()
-        results = model.transcribe(audio=audio_path, language=None)
-        text = results[0].text.strip() if results else ""
+        segments, _ = model.transcribe(
+            audio_path,
+            beam_size=5,
+            vad_filter=True,
+            condition_on_previous_text=False,
+        )
+        text = "".join(segment.text for segment in segments).strip()
         if not text:
             raise gr.Error("没有识别到参考音频中的语音内容。")
         return text
