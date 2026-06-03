@@ -258,7 +258,7 @@ def build_demo(default_model: str):
                         choices=["cfg", "apg"],
                         value="apg",
                     )
-                    seed = gr.Number(label="Seed", value=1024, precision=0)
+                    seed = gr.Number(label="种子", value=1024, precision=0)
 
                 audio_output = gr.Audio(label="生成结果", type="numpy")
                 file_output = gr.File(label="音频文件")
