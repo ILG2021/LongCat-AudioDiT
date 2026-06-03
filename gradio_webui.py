@@ -17,7 +17,7 @@ from audiodit import AudioDiTModel
 from utils import approx_duration_from_text, load_audio, normalize_text
 
 
-DEFAULT_MODEL = "meituan-longcat/LongCat-AudioDiT-1B"
+DEFAULT_MODEL = "meituan-longcat/LongCat-AudioDiT-3.5B"
 DEFAULT_OUTPUT_DIR = Path("outputs")
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
