@@ -207,14 +207,6 @@ def build_demo(default_model: str):
         css=css,
         analytics_enabled=False,
     ) as demo:
-        gr.HTML(
-            """
-            <div class="app-title">
-              <h1>TT工作台</h1>
-              <p>输入文本，生成自然清晰的语音</p>
-            </div>
-            """
-        )
 
         model_path = gr.State(default_model)
 
