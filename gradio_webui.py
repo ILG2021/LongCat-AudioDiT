@@ -115,6 +115,50 @@ class VoiceSynthesisEngine:
 
 
 engine = VoiceSynthesisEngine()
+transcription_model = None
+
+
+def get_transcription_model():
+    global transcription_model
+    if transcription_model is not None:
+        return transcription_model
+
+    from qwen_asr import Qwen3ASRModel
+
+    if torch.cuda.is_available():
+        transcription_model = Qwen3ASRModel.from_pretrained(
+            "Qwen/Qwen3-ASR-1.7B",
+            dtype=torch.bfloat16,
+            device_map="cuda:0",
+            max_inference_batch_size=1,
+            max_new_tokens=256,
+        )
+    else:
+        transcription_model = Qwen3ASRModel.from_pretrained(
+            "Qwen/Qwen3-ASR-1.7B",
+            dtype=torch.float32,
+            device_map="cpu",
+            max_inference_batch_size=1,
+            max_new_tokens=256,
+        )
+    return transcription_model
+
+
+def transcribe_reference_audio(audio_path):
+    if not audio_path:
+        return ""
+
+    try:
+        model = get_transcription_model()
+        results = model.transcribe(audio=audio_path, language=None)
+        text = results[0].text.strip() if results else ""
+        if not text:
+            raise gr.Error("没有识别到参考音频中的语音内容。")
+        return text
+    except gr.Error:
+        raise
+    except Exception as exc:
+        raise gr.Error(f"自动识别参考音频失败：{exc}") from exc
 
 
 def toggle_reference_mode(mode: str):
@@ -222,6 +266,11 @@ def build_demo(default_model: str):
                 file_output = gr.File(label="音频文件")
 
         mode.change(toggle_reference_mode, inputs=mode, outputs=[reference_audio, reference_text])
+        reference_audio.change(
+            transcribe_reference_audio,
+            inputs=reference_audio,
+            outputs=reference_text,
+        )
         generate.click(
             run_inference,
             inputs=[
