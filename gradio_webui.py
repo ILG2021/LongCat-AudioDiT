@@ -285,6 +285,7 @@ def parse_args():
     parser.add_argument("--model_dir", type=str, default=DEFAULT_MODEL, help="Backend model path")
     parser.add_argument("--server_name", type=str, default="127.0.0.1")
     parser.add_argument("--server_port", type=int, default=7860)
+    parser.add_argument("--root_path", type=str, default=None)
     parser.add_argument("--share", action="store_true", help="Create a public share link")
     return parser.parse_args()
 
@@ -295,5 +296,6 @@ if __name__ == "__main__":
     demo.queue().launch(
         server_name=args.server_name,
         server_port=args.server_port,
+        root_path=args.root_path,
         share=args.share,
     )
