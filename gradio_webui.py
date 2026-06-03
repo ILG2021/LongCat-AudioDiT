@@ -20,6 +20,7 @@ from utils import approx_duration_from_text, load_audio, normalize_text
 DEFAULT_MODEL = "meituan-longcat/LongCat-AudioDiT-3.5B"
 DEFAULT_OUTPUT_DIR = Path("outputs")
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+MODEL_DTYPE = torch.bfloat16 if DEVICE.type == "cuda" else torch.float32
 
 
 class VoiceSynthesisEngine:
@@ -33,9 +34,11 @@ class VoiceSynthesisEngine:
         if self.model is not None and self.model_path == model_path:
             return
 
-        self.model = AudioDiTModel.from_pretrained(model_path).to(DEVICE)
-        if DEVICE.type == "cuda":
-            self.model.vae.to_half()
+        self.model = AudioDiTModel.from_pretrained(
+            model_path,
+            torch_dtype=MODEL_DTYPE,
+        ).to(DEVICE)
+        self.model.vae.to(dtype=MODEL_DTYPE)
         self.model.eval()
         self.tokenizer = AutoTokenizer.from_pretrained(self.model.config.text_encoder_model)
         self.model_path = model_path
@@ -88,7 +91,9 @@ class VoiceSynthesisEngine:
                 )
             off = 3
             padded_prompt = F.pad(padded_prompt, (0, full_hop * off))
-            prompt_latent = self.model.vae.encode(padded_prompt.unsqueeze(0).to(DEVICE))
+            prompt_latent = self.model.vae.encode(
+                padded_prompt.unsqueeze(0).to(device=DEVICE, dtype=MODEL_DTYPE)
+            )
             if off:
                 prompt_latent = prompt_latent[..., :-off]
             prompt_dur = prompt_latent.shape[-1]
