@@ -233,13 +233,13 @@ def build_demo(default_model: str):
                 reference_audio = gr.Audio(
                     label="参考音频",
                     type="filepath",
-                    visible=False,
+                    visible=True,
                 )
                 reference_text = gr.Textbox(
                     label="参考音频文本",
                     placeholder="输入参考音频中说的话，可提升生成稳定性",
                     lines=2,
-                    visible=False,
+                    visible=True,
                 )
                 generate = gr.Button("生成音频", variant="primary", size="lg")
 
