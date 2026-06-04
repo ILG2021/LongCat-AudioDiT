@@ -1076,25 +1076,57 @@ class AudioDiTModel(AudioDiTPreTrainedModel):
             apg_buffer = _MomentumBuffer(momentum=-0.3)
 
         # ── ODE function ──────────────────────────────────────────────
+        transformer_dtype = next(self.transformer.parameters()).dtype
+        text_condition_in = (
+            text_condition.to(transformer_dtype)
+            if transformer_dtype != torch.float32
+            else text_condition
+        )
+        neg_text_in = (
+            neg_text.to(transformer_dtype)
+            if transformer_dtype != torch.float32
+            else neg_text
+        )
+        latent_cond_in = (
+            latent_cond.to(transformer_dtype)
+            if transformer_dtype != torch.float32
+            else latent_cond
+        )
+        empty_latent_cond_in = (
+            empty_latent_cond.to(transformer_dtype)
+            if transformer_dtype != torch.float32
+            else empty_latent_cond
+        )
+
         def fn(t, x):
             x[:, :latent_len] = prompt_noise * (1-t) + latent_cond[:, :latent_len] * t
+            x_in = x.to(transformer_dtype) if transformer_dtype != x.dtype else x
+            time_in = t.to(transformer_dtype) if transformer_dtype != torch.float32 else t
             output = self.transformer(
-                x=x, text=text_condition, text_len=text_condition_len, time=t,
+                x=x_in, text=text_condition_in, text_len=text_condition_len, time=time_in,
                 mask=mask, cond_mask=text_mask,
-                return_ith_layer=repa_layer, latent_cond=latent_cond,
+                return_ith_layer=repa_layer, latent_cond=latent_cond_in,
             )
-            pred = output["last_hidden_state"]
+            pred = output["last_hidden_state"].float()
 
             if cfg_strength < 1e-5:
                 return pred
 
             x[:, :latent_len] = 0
+            x_in_null = x.to(transformer_dtype) if transformer_dtype != x.dtype else x
             null_output = self.transformer(
-                x=x, text=neg_text, text_len=neg_text_len, time=t,
+                x=x_in_null, text=neg_text_in, text_len=neg_text_len, time=time_in,
                 mask=mask, cond_mask=text_mask,
-                return_ith_layer=repa_layer, latent_cond=empty_latent_cond,
+                return_ith_layer=repa_layer, latent_cond=empty_latent_cond_in,
             )
-            null_pred = null_output["last_hidden_state"]
+            null_pred = null_output["last_hidden_state"].float()
+
+            if torch.isnan(null_pred).any() or torch.isinf(null_pred).any():
+                null_pred = torch.where(
+                    torch.isnan(null_pred) | torch.isinf(null_pred),
+                    torch.zeros_like(null_pred),
+                    null_pred,
+                )
 
             if guidance_method == "cfg":
                 return pred + (pred - null_pred) * cfg_strength
